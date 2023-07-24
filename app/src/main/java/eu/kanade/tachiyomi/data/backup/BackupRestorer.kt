@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.data.backup
 import android.content.Context
 import android.net.Uri
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.backup.models.BackupBookmark
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
@@ -115,6 +116,7 @@ class BackupRestorer(
     private suspend fun restoreManga(backupManga: BackupManga, backupCategories: List<BackupCategory>, sync: Boolean) {
         val manga = backupManga.getMangaImpl()
         val chapters = backupManga.getChaptersImpl()
+        val backupBookmarks = backupManga.bookmarks
         val categories = backupManga.categories.map { it.toInt() }
         val history =
             backupManga.brokenHistory.map { BackupHistory(it.url, it.lastRead, it.readDuration) } + backupManga.history
@@ -124,13 +126,13 @@ class BackupRestorer(
             val dbManga = backupManager.getMangaFromDatabase(manga.url, manga.source)
             if (dbManga == null) {
                 // Manga not in database
-                restoreExistingManga(manga, chapters, categories, history, tracks, backupCategories)
+                restoreExistingManga(manga, chapters, categories, history, tracks, backupCategories, backupBookmarks)
             } else {
                 // Manga in database
                 // Copy information from manga already in database
                 val updatedManga = backupManager.restoreExistingManga(manga, dbManga)
                 // Fetch rest of manga information
-                restoreNewManga(updatedManga, chapters, categories, history, tracks, backupCategories)
+                restoreNewManga(updatedManga, chapters, categories, history, tracks, backupCategories, backupBookmarks)
             }
         } catch (e: Exception) {
             val sourceName = sourceMapping[manga.source] ?: manga.source.toString()
@@ -159,10 +161,11 @@ class BackupRestorer(
         history: List<BackupHistory>,
         tracks: List<Track>,
         backupCategories: List<BackupCategory>,
+        backupBookmarks: List<BackupBookmark>,
     ) {
         val fetchedManga = backupManager.restoreNewManga(manga)
         backupManager.restoreChapters(fetchedManga, chapters)
-        restoreExtras(fetchedManga, categories, history, tracks, backupCategories)
+        restoreExtras(fetchedManga, categories, history, tracks, backupCategories, backupBookmarks)
     }
 
     private suspend fun restoreNewManga(
@@ -172,15 +175,24 @@ class BackupRestorer(
         history: List<BackupHistory>,
         tracks: List<Track>,
         backupCategories: List<BackupCategory>,
+        backupBookmarks: List<BackupBookmark>,
     ) {
         backupManager.restoreChapters(backupManga, chapters)
-        restoreExtras(backupManga, categories, history, tracks, backupCategories)
+        restoreExtras(backupManga, categories, history, tracks, backupCategories, backupBookmarks)
     }
 
-    private suspend fun restoreExtras(manga: Manga, categories: List<Int>, history: List<BackupHistory>, tracks: List<Track>, backupCategories: List<BackupCategory>) {
+    private suspend fun restoreExtras(
+        manga: Manga,
+        categories: List<Int>,
+        history: List<BackupHistory>,
+        tracks: List<Track>,
+        backupCategories: List<BackupCategory>,
+        backupBookmarks: List<BackupBookmark>,
+    ) {
         backupManager.restoreCategories(manga, categories, backupCategories)
         backupManager.restoreHistory(history)
         backupManager.restoreTracking(manga, tracks)
+        backupManager.restoreBookmarks(manga, backupBookmarks)
     }
 
     /**

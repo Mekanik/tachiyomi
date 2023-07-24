@@ -1,0 +1,19 @@
+CREATE VIEW mangaWithBookmarksView AS
+SELECT
+    mangas._id AS mangaId,
+    mangas.title AS mangaTitle,
+    mangas.thumbnail_url AS mangaThumbnailUrl,
+    mangas.source AS mangaSource,
+    mangas.favorite AS isMangaFavorite,
+    mangas.cover_last_modified AS mangaCoverLastModified,
+    COUNT(*) AS numberOfBookmarks,
+    MAX(bookmarks.last_modified_at) AS bookmarkLastModified
+FROM bookmarks
+JOIN mangas ON mangas._id = bookmarks.manga_id
+WHERE mangas.favorite = 1
+GROUP BY mangas._id
+ORDER BY numberOfBookmarks DESC;
+
+mangaWithBookmarks:
+SELECT *
+FROM mangaWithBookmarksView;

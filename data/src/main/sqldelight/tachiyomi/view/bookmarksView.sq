@@ -1,0 +1,29 @@
+CREATE VIEW bookmarksView AS
+SELECT
+    bookmarks._id AS bookmarkId,
+    mangas._id AS mangaId,
+    chapters._id AS chapterId,
+    bookmarks.page_index AS pageIndex,
+    mangas.title AS mangaTitle,
+    mangas.thumbnail_url AS mangaThumbnailUrl,
+    mangas.source AS mangaSource,
+    mangas.favorite AS isMangaFavorite,
+    mangas.cover_last_modified AS mangaCoverLastModified,
+    chapters.chapter_number AS chapterNumber,
+    chapters.name AS chapterName,
+    bookmarks.note,
+    bookmarks.last_modified_at AS lastModifiedAt
+FROM bookmarks
+JOIN mangas ON mangas._id = bookmarks.manga_id
+JOIN chapters ON chapters._id = bookmarks.chapter_id
+ORDER BY mangaTitle, chapterNumber ASC, pageIndex ASC;
+
+getBookmarksByManga:
+SELECT *
+FROM bookmarksView
+WHERE mangaId = :mangaId;
+
+getBookmarksByNotePattern:
+SELECT *
+FROM bookmarksView
+WHERE note LIKE :notePattern;

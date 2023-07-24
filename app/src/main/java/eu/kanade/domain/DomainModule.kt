@@ -17,6 +17,7 @@ import eu.kanade.domain.source.interactor.ToggleLanguage
 import eu.kanade.domain.source.interactor.ToggleSource
 import eu.kanade.domain.source.interactor.ToggleSourcePin
 import eu.kanade.domain.track.interactor.TrackChapter
+import tachiyomi.data.bookmark.BookmarkRepositoryImpl
 import tachiyomi.data.category.CategoryRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
 import tachiyomi.data.history.HistoryRepositoryImpl
@@ -26,6 +27,11 @@ import tachiyomi.data.source.SourceRepositoryImpl
 import tachiyomi.data.source.StubSourceRepositoryImpl
 import tachiyomi.data.track.TrackRepositoryImpl
 import tachiyomi.data.updates.UpdatesRepositoryImpl
+import tachiyomi.domain.bookmark.interactor.DeleteBookmark
+import tachiyomi.domain.bookmark.interactor.GetBookmark
+import tachiyomi.domain.bookmark.interactor.GetBookmarks
+import tachiyomi.domain.bookmark.interactor.SetBookmark
+import tachiyomi.domain.bookmark.repository.BookmarkRepository
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
 import tachiyomi.domain.category.interactor.DeleteCategory
 import tachiyomi.domain.category.interactor.GetCategories
@@ -151,5 +157,11 @@ class DomainModule : InjektModule {
         addFactory { ToggleLanguage(get()) }
         addFactory { ToggleSource(get()) }
         addFactory { ToggleSourcePin(get()) }
+
+        addSingletonFactory<BookmarkRepository> { BookmarkRepositoryImpl(get()) }
+        addFactory { SetBookmark(get()) }
+        addFactory { DeleteBookmark(get()) }
+        addFactory { GetBookmark(get()) }
+        addFactory { GetBookmarks(get()) }
     }
 }

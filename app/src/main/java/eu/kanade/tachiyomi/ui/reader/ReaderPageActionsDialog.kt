@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Share
@@ -21,6 +22,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.ui.bookmarks.EditBookmarkDialog
+import tachiyomi.domain.bookmark.model.Bookmark
 import tachiyomi.presentation.core.components.ActionButton
 import tachiyomi.presentation.core.components.material.padding
 
@@ -30,8 +33,12 @@ fun ReaderPageActionsDialog(
     onSetAsCover: () -> Unit,
     onShare: () -> Unit,
     onSave: () -> Unit,
+    onBookmarkPage: (String) -> Unit,
+    onUnbookmarkPage: () -> Unit,
+    getPageBookmark: () -> Bookmark?,
 ) {
     var showSetCoverDialog by remember { mutableStateOf(false) }
+    var showEditPageBookmarkDialog by remember { mutableStateOf(false) }
 
     AdaptiveSheet(
         onDismissRequest = onDismissRequest,
@@ -64,6 +71,12 @@ fun ReaderPageActionsDialog(
                     onDismissRequest()
                 },
             )
+            ActionButton(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.page_bookmark),
+                icon = Icons.Outlined.Bookmark,
+                onClick = { showEditPageBookmarkDialog = true },
+            )
         }
     }
 
@@ -74,6 +87,23 @@ fun ReaderPageActionsDialog(
                 showSetCoverDialog = false
             },
             onDismiss = { showSetCoverDialog = false },
+        )
+    }
+
+    if (showEditPageBookmarkDialog) {
+        EditBookmarkDialog(
+            onConfirm = { bookmarkNote ->
+                onBookmarkPage(bookmarkNote)
+                showEditPageBookmarkDialog = false
+                onDismissRequest()
+            },
+            onDelete = {
+                onUnbookmarkPage()
+                showEditPageBookmarkDialog = false
+                onDismissRequest()
+            },
+            onDismiss = { showEditPageBookmarkDialog = false },
+            bookmark = getPageBookmark(),
         )
     }
 }

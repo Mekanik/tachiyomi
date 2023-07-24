@@ -6,6 +6,8 @@ import android.net.Uri
 import com.hippo.unifile.UniFile
 import eu.kanade.domain.chapter.model.copyFrom
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.backup.BackupConst.BACKUP_BOOKMARKS
+import eu.kanade.tachiyomi.data.backup.BackupConst.BACKUP_BOOKMARKS_MASK
 import eu.kanade.tachiyomi.data.backup.BackupConst.BACKUP_CATEGORY
 import eu.kanade.tachiyomi.data.backup.BackupConst.BACKUP_CATEGORY_MASK
 import eu.kanade.tachiyomi.data.backup.BackupConst.BACKUP_CHAPTER
@@ -15,11 +17,13 @@ import eu.kanade.tachiyomi.data.backup.BackupConst.BACKUP_HISTORY_MASK
 import eu.kanade.tachiyomi.data.backup.BackupConst.BACKUP_TRACK
 import eu.kanade.tachiyomi.data.backup.BackupConst.BACKUP_TRACK_MASK
 import eu.kanade.tachiyomi.data.backup.models.Backup
+import eu.kanade.tachiyomi.data.backup.models.BackupBookmark
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupSerializer
 import eu.kanade.tachiyomi.data.backup.models.BackupSource
+import eu.kanade.tachiyomi.data.backup.models.backupBookmarkMapper
 import eu.kanade.tachiyomi.data.backup.models.backupCategoryMapper
 import eu.kanade.tachiyomi.data.backup.models.backupChapterMapper
 import eu.kanade.tachiyomi.data.backup.models.backupTrackMapper
@@ -37,6 +41,7 @@ import tachiyomi.data.Manga_sync
 import tachiyomi.data.Mangas
 import tachiyomi.data.updateStrategyAdapter
 import tachiyomi.domain.backup.service.BackupPreferences
+import tachiyomi.domain.bookmark.interactor.SetBookmark
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.history.interactor.GetHistory
@@ -62,6 +67,7 @@ class BackupManager(
     private val getCategories: GetCategories = Injekt.get()
     private val getFavorites: GetFavorites = Injekt.get()
     private val getHistory: GetHistory = Injekt.get()
+    private val setBookmark: SetBookmark = Injekt.get()
 
     internal val parser = ProtoBuf
 
@@ -184,6 +190,14 @@ class BackupManager(
             val chapters = handler.awaitList { chaptersQueries.getChaptersByMangaId(manga.id, backupChapterMapper) }
             if (chapters.isNotEmpty()) {
                 mangaObject.chapters = chapters
+            }
+        }
+
+        // Check if user wants bookmarks information in backup
+        if (options and BACKUP_BOOKMARKS_MASK == BACKUP_BOOKMARKS) {
+            val bookmarks = handler.awaitList { bookmarksQueries.getAllBackupByMangaId(manga.id, backupBookmarkMapper) }
+            if (bookmarks.isNotEmpty()) {
+                mangaObject.bookmarks = bookmarks
             }
         }
 
@@ -460,6 +474,7 @@ class BackupManager(
                 } else if (updatedChapter.lastPageRead == 0L && dbChapter.last_page_read != 0L) {
                     updatedChapter = updatedChapter.copy(lastPageRead = dbChapter.last_page_read)
                 }
+                // TODO: review this bookmark merging logic, make sure, consistent with page bookmarks.
                 if (!updatedChapter.bookmark && dbChapter.bookmark) {
                     updatedChapter = updatedChapter.copy(bookmark = true)
                 }
@@ -471,6 +486,26 @@ class BackupManager(
         val newChapters = processed.groupBy { it.id > 0 }
         newChapters[true]?.let { updateKnownChapters(it) }
         newChapters[false]?.let { insertChapters(it) }
+    }
+
+    internal suspend fun restoreBookmarks(manga: Manga, backupBookmarks: List<BackupBookmark>) {
+        // Map chapters from backup to db chapters using chapter number.
+        val chapterIdByNumber = handler
+            .awaitList { chaptersQueries.getChaptersByMangaId(manga.id) }
+            .associate { it.chapter_number to it._id }
+
+        val bookmarks = backupBookmarks.mapNotNull {
+            chapterIdByNumber[it.chapterNumber]
+                ?.let { chapterId ->
+                    it.toBookmarkImpl()
+                        .copy(
+                            mangaId = manga.id,
+                            chapterId = chapterId,
+                        )
+                }
+        }
+
+        setBookmark.awaitAll(bookmarks)
     }
 
     /**

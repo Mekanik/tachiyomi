@@ -1,0 +1,72 @@
+CREATE TABLE bookmarks(
+    _id INTEGER NOT NULL PRIMARY KEY,
+    manga_id INTEGER NOT NULL,
+    chapter_id INTEGER NOT NULL,
+    page_index INTEGER,
+    note TEXT,
+    last_modified_at INTEGER AS Long NOT NULL DEFAULT 0,
+
+    FOREIGN KEY(manga_id) REFERENCES mangas (_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(chapter_id)  REFERENCES chapters (_id)
+    ON DELETE CASCADE
+);
+
+-- Only single bookmark per page is allowed.
+CREATE UNIQUE INDEX bookmark_manga_id_chapter_id_page_index
+ON bookmarks(manga_id, chapter_id, page_index);
+
+-- For chapters FK with DELETE CASCADE.
+CREATE INDEX bookmark_chapter_id ON bookmarks(chapter_id);
+
+CREATE TRIGGER update_last_modified_at_bookmarks
+AFTER UPDATE ON bookmarks
+FOR EACH ROW
+BEGIN
+  UPDATE bookmarks
+  SET last_modified_at = strftime('%s', 'now')
+  WHERE _id = new._id;
+END;
+
+-- Methods
+getBookmarkById:
+SELECT *
+FROM bookmarks
+WHERE _id = :id;
+
+getAllByMangaId:
+SELECT *
+FROM bookmarks
+WHERE manga_id = :mangaId;
+
+getAllBackupByMangaId:
+SELECT
+    chapters.chapter_number,
+    bookmarks.page_index,
+    bookmarks.note,
+    bookmarks.last_modified_at
+FROM bookmarks JOIN chapters ON chapters._id = bookmarks.chapter_id
+WHERE bookmarks.manga_id = :mangaId;
+
+getBookmarkByMangaAndChapterPage:
+SELECT *
+FROM bookmarks
+WHERE manga_id = :mangaId AND chapter_id = :chapterId AND page_index = :pageIndex;
+
+insert:
+INSERT INTO bookmarks(manga_id, chapter_id, page_index, note, last_modified_at)
+VALUES (:mangaId, :chapterId, :pageIndex, :note, :lastModifiedAt);
+
+update:
+UPDATE bookmarks SET
+    note = coalesce(:note, note)
+WHERE _id = :bookmarkId;
+
+delete:
+DELETE FROM bookmarks
+WHERE _id = :bookmarkId;
+
+deleteAllByMangaId:
+DELETE FROM bookmarks
+WHERE manga_id = :mangaId;

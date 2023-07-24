@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import kotlinx.coroutines.runBlocking
+import tachiyomi.domain.bookmark.interactor.GetBookmarks
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.track.interactor.GetTracks
 import uy.kohesive.injekt.Injekt
@@ -18,12 +19,14 @@ object MigrationFlags {
     private const val TRACK = 0b00100
     private const val CUSTOM_COVER = 0b01000
     private const val DELETE_DOWNLOADED = 0b10000
+    private const val BOOKMARKS = 0b100000
 
     private val coverCache: CoverCache by injectLazy()
     private val getTracks: GetTracks = Injekt.get()
     private val downloadCache: DownloadCache by injectLazy()
+    private val getBookmarks: GetBookmarks by injectLazy()
 
-    val flags get() = arrayOf(CHAPTERS, CATEGORIES, TRACK, CUSTOM_COVER, DELETE_DOWNLOADED)
+    val flags get() = arrayOf(CHAPTERS, CATEGORIES, TRACK, CUSTOM_COVER, DELETE_DOWNLOADED, BOOKMARKS)
     private var enableFlags = emptyList<Int>().toMutableList()
 
     fun hasChapters(value: Int): Boolean {
@@ -44,6 +47,10 @@ object MigrationFlags {
 
     fun hasDeleteDownloaded(value: Int): Boolean {
         return value and DELETE_DOWNLOADED != 0
+    }
+
+    fun hasBookmarks(value: Int): Boolean {
+        return value and BOOKMARKS != 0
     }
 
     fun getEnabledFlagsPositions(value: Int): List<Int> {
@@ -72,6 +79,10 @@ object MigrationFlags {
             if (downloadCache.getDownloadCount(manga) > 0) {
                 titles.add(R.string.delete_downloaded)
                 enableFlags.add(DELETE_DOWNLOADED)
+            }
+            if (runBlocking { getBookmarks.awaitBookmarks(manga.id) }.isNotEmpty()) {
+                titles.add(R.string.label_bookmarks)
+                enableFlags.add(BOOKMARKS)
             }
         }
         return titles.toTypedArray()
