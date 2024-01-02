@@ -22,6 +22,7 @@ import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.domain.track.interactor.RefreshTracks
 import eu.kanade.domain.track.interactor.SyncChapterProgressWithTrack
 import eu.kanade.domain.track.interactor.TrackChapter
+import tachiyomi.data.bookmark.BookmarkRepositoryImpl
 import tachiyomi.data.category.CategoryRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
 import tachiyomi.data.history.HistoryRepositoryImpl
@@ -31,6 +32,13 @@ import tachiyomi.data.source.SourceRepositoryImpl
 import tachiyomi.data.source.StubSourceRepositoryImpl
 import tachiyomi.data.track.TrackRepositoryImpl
 import tachiyomi.data.updates.UpdatesRepositoryImpl
+import tachiyomi.domain.bookmark.interactor.DeleteBookmark
+import tachiyomi.domain.bookmark.interactor.GetBookmark
+import tachiyomi.domain.bookmark.interactor.GetBookmarkedMangas
+import tachiyomi.domain.bookmark.interactor.GetBookmarkedPages
+import tachiyomi.domain.bookmark.interactor.GetBookmarks
+import tachiyomi.domain.bookmark.interactor.SetBookmark
+import tachiyomi.domain.bookmark.repository.BookmarkRepository
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
 import tachiyomi.domain.category.interactor.DeleteCategory
 import tachiyomi.domain.category.interactor.GetCategories
@@ -138,7 +146,7 @@ class DomainModule : InjektModule {
         addFactory { UpdateChapter(get()) }
         addFactory { SetReadStatus(get(), get(), get(), get()) }
         addFactory { ShouldUpdateDbChapter() }
-        addFactory { SyncChaptersWithSource(get(), get(), get(), get(), get(), get(), get(), get()) }
+        addFactory { SyncChaptersWithSource(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         addFactory { GetAvailableScanlators(get()) }
 
         addSingletonFactory<HistoryRepository> { HistoryRepositoryImpl(get()) }
@@ -167,5 +175,13 @@ class DomainModule : InjektModule {
         addFactory { ToggleLanguage(get()) }
         addFactory { ToggleSource(get()) }
         addFactory { ToggleSourcePin(get()) }
+
+        addSingletonFactory<BookmarkRepository> { BookmarkRepositoryImpl(get()) }
+        addFactory { SetBookmark(get(), get()) }
+        addFactory { DeleteBookmark(get(), get()) }
+        addFactory { GetBookmark(get()) }
+        addFactory { GetBookmarks(get()) }
+        addFactory { GetBookmarkedMangas(get()) }
+        addFactory { GetBookmarkedPages(get()) }
     }
 }

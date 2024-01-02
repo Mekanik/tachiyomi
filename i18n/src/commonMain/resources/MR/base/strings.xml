@@ -31,6 +31,7 @@
     <string name="label_backup">Backup and restore</string>
     <string name="label_data_storage">Data and storage</string>
     <string name="label_stats">Statistics</string>
+    <string name="label_bookmarks">Bookmarks</string>
     <string name="label_migration">Migrate</string>
     <string name="label_extensions">Extensions</string>
     <string name="label_extension_info">Extension info</string>
@@ -84,6 +85,11 @@
     <string name="action_download">Download</string>
     <string name="action_bookmark">Bookmark chapter</string>
     <string name="action_remove_bookmark">Unbookmark chapter</string>
+    <string name="action_add_page_bookmark">Add page bookmark</string>
+    <string name="action_update_page_bookmark">Update page bookmark</string>
+    <string name="action_update_bookmark">Update bookmark</string>
+    <string name="action_delete_bookmark">Delete bookmark</string>
+    <string name="action_delete_all_bookmarks">Delete all bookmarks</string>
     <string name="action_delete">Delete</string>
     <string name="action_update_library">Update library</string>
     <string name="action_enable_all">Enable all</string>
@@ -747,6 +753,7 @@
     <!-- Reader activity -->
     <string name="custom_filter">Custom filter</string>
     <string name="set_as_cover">Set as cover</string>
+    <string name="page_bookmark">Bookmark page</string>
     <string name="cover_updated">Cover updated</string>
     <string name="share_page_info">%1$s: %2$s, page %3$d</string>
     <string name="chapter_progress">Page: %1$d</string>
@@ -866,6 +873,7 @@
     <!-- Information Text -->
     <string name="information_no_downloads">No downloads</string>
     <string name="information_no_recent">No recent updates</string>
+    <string name="information_no_bookmarks">No bookmarks</string>
     <string name="information_no_recent_manga">Nothing read recently</string>
     <string name="information_empty_library">Your library is empty</string>
     <string name="information_no_manga_category">Category is empty</string>
@@ -916,4 +924,13 @@
     <string name="exception_http">HTTP %d, check website in WebView</string>
     <string name="exception_offline">No Internet connection</string>
     <string name="exception_unknown_host">Couldn\'t reach %s</string>
+
+    <!-- Bookmarks view and editing. -->
+    <string name="bookmark_note_placeholder">Provide an optional bookmark note</string>
+    <string name="bookmark_total_in_manga">Total bookmarks: %1$d</string>
+    <string name="bookmark_last_updated_in_manga">Last bookmark update: %1$s</string>
+    <string name="delete_bookmark_confirmation">Do you wish to delete the bookmark?</string>
+    <string name="bookmark_page_number">Page: %1$d</string>
+    <string name="bookmark_chapter">Chapter bookmark</string>
+    <string name="bookmark_delete_manga_confirmation">Are you sure? Bookmarks will be lost.</string>
 </resources>

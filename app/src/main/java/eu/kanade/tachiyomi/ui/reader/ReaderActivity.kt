@@ -96,10 +96,16 @@ import uy.kohesive.injekt.api.get
 class ReaderActivity : BaseActivity() {
 
     companion object {
-        fun newIntent(context: Context, mangaId: Long?, chapterId: Long?): Intent {
+        fun newIntent(
+            context: Context,
+            mangaId: Long?,
+            chapterId: Long?,
+            pageIndex: Int? = null,
+        ): Intent {
             return Intent(context, ReaderActivity::class.java).apply {
                 putExtra("manga", mangaId)
                 putExtra("chapter", chapterId)
+                pageIndex?.let { page -> putExtra("page", page) }
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
         }
@@ -150,10 +156,11 @@ class ReaderActivity : BaseActivity() {
                 finish()
                 return
             }
+            val page = intent.extras?.getInt("page", -1) ?: -1
             NotificationReceiver.dismissNotification(this, manga.hashCode(), Notifications.ID_NEW_CHAPTERS)
 
             lifecycleScope.launchNonCancellable {
-                val initResult = viewModel.init(manga, chapter)
+                val initResult = viewModel.init(manga, chapter, page)
                 if (!initResult.getOrDefault(false)) {
                     val exception = initResult.exceptionOrNull() ?: IllegalStateException("Unknown err")
                     withUIContext {
@@ -448,6 +455,9 @@ class ReaderActivity : BaseActivity() {
                         onSetAsCover = viewModel::setAsCover,
                         onShare = viewModel::shareImage,
                         onSave = viewModel::saveImage,
+                        onBookmarkPage = viewModel::updateCurrentPageBookmark,
+                        onUnbookmarkPage = viewModel::deleteCurrentPageBookmark,
+                        getPageBookmark = viewModel::getPageBookmark,
                     )
                 }
                 null -> {}

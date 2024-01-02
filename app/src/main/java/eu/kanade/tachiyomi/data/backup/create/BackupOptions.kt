@@ -10,6 +10,7 @@ data class BackupOptions(
     val chapters: Boolean = true,
     val tracking: Boolean = true,
     val history: Boolean = true,
+    val bookmarks: Boolean = true,
     val appSettings: Boolean = true,
     val sourceSettings: Boolean = true,
     val privateSettings: Boolean = false,
@@ -24,6 +25,7 @@ data class BackupOptions(
         appSettings,
         sourceSettings,
         privateSettings,
+        bookmarks,
     )
 
     fun anyEnabled() = libraryEntries || appSettings || sourceSettings
@@ -59,6 +61,12 @@ data class BackupOptions(
                 setter = { options, enabled -> options.copy(history = enabled) },
                 enabled = { it.libraryEntries },
             ),
+            Entry(
+                label = MR.strings.label_bookmarks,
+                getter = BackupOptions::bookmarks,
+                setter = { options, enabled -> options.copy(bookmarks = enabled) },
+                enabled = { it.libraryEntries },
+            ),
         )
 
         val settingsOptions = persistentListOf(
@@ -89,6 +97,7 @@ data class BackupOptions(
             appSettings = array[5],
             sourceSettings = array[6],
             privateSettings = array[7],
+            bookmarks = array.getOrElse(8) { true },
         )
     }
 

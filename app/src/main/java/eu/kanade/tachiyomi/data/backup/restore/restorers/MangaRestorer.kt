@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.data.backup.restore.restorers
 
 import eu.kanade.domain.manga.interactor.UpdateManga
+import eu.kanade.tachiyomi.data.backup.models.BackupBookmark
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
@@ -8,6 +9,8 @@ import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupTracking
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.data.UpdateStrategyColumnAdapter
+import tachiyomi.domain.bookmark.interactor.SetBookmark
+import tachiyomi.domain.bookmark.model.Bookmark
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
@@ -31,6 +34,7 @@ class MangaRestorer(
     private val updateManga: UpdateManga = Injekt.get(),
     private val getTracks: GetTracks = Injekt.get(),
     private val insertTrack: InsertTrack = Injekt.get(),
+    private val setBookmark: SetBookmark = Injekt.get(),
     fetchInterval: FetchInterval = Injekt.get(),
 ) {
 
@@ -72,6 +76,7 @@ class MangaRestorer(
             backupCategories = backupCategories,
             history = backupManga.history + backupManga.brokenHistory.map { it.toBackupHistory() },
             tracks = backupManga.tracking,
+            bookmarks = backupManga.bookmarks,
         )
     }
 
@@ -262,11 +267,13 @@ class MangaRestorer(
         backupCategories: List<BackupCategory>,
         history: List<BackupHistory>,
         tracks: List<BackupTracking>,
+        bookmarks: List<BackupBookmark>,
     ): Manga {
         restoreCategories(manga, categories, backupCategories)
         restoreChapters(manga, chapters)
         restoreTracking(manga, tracks)
         restoreHistory(history)
+        restoreBookmarks(manga, bookmarks)
         updateManga.awaitUpdateFetchInterval(manga, now, currentFetchWindow)
         return manga
     }
@@ -395,6 +402,37 @@ class MangaRestorer(
                     )
                 }
             }
+        }
+    }
+
+    private suspend fun restoreBookmarks(manga: Manga, backupBookmarks: List<BackupBookmark>) {
+        val chapters = getChaptersByMangaId.await(manga.id)
+
+        val bookmarks: List<Bookmark> =
+            if (backupBookmarks.isEmpty()) {
+                // No bookmarks list in the backup.
+                // It's either an older version backup or backup without bookmarks.
+                // Create chapter-level bookmarks (they will not affect existing chapter bookmarks).
+                chapters
+                    .filter { it.bookmark }
+                    .map { Bookmark.create().copy(mangaId = manga.id, chapterId = it.id) }
+            } else {
+                // Map chapters from backup to db chapters and insert bookmark records based on backup.
+                val chapterIdByUrl = chapters.associate { it.url to it.id }
+                backupBookmarks.mapNotNull {
+                    chapterIdByUrl[it.chapterUrl]
+                        ?.let { chapterId ->
+                            it.toBookmarkImpl()
+                                .copy(
+                                    mangaId = manga.id,
+                                    chapterId = chapterId,
+                                )
+                        }
+                }
+            }
+
+        if (bookmarks.isNotEmpty()) {
+            setBookmark.awaitAll(bookmarks, updateChapters = false)
         }
     }
 

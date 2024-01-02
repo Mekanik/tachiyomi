@@ -11,6 +11,9 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.online.HttpSource
 import tachiyomi.data.chapter.ChapterSanitizer
+import tachiyomi.domain.bookmark.interactor.GetBookmarks
+import tachiyomi.domain.bookmark.interactor.SetBookmark
+import tachiyomi.domain.bookmark.model.BookmarkWithChapterNumber
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.ShouldUpdateDbChapter
 import tachiyomi.domain.chapter.interactor.UpdateChapter
@@ -34,6 +37,8 @@ class SyncChaptersWithSource(
     private val updateChapter: UpdateChapter,
     private val getChaptersByMangaId: GetChaptersByMangaId,
     private val getExcludedScanlators: GetExcludedScanlators,
+    private val getBookmarks: GetBookmarks,
+    private val setBookmark: SetBookmark,
 ) {
 
     /**
@@ -143,6 +148,12 @@ class SyncChaptersWithSource(
         }
 
         val reAdded = mutableListOf<Chapter>()
+        val reAddedBookmarks = mutableListOf<BookmarkWithChapterNumber>()
+        val bookmarksByChapterNumber = if (newChapters.isEmpty()) {
+            emptyMap()
+        } else {
+            getBookmarks.awaitWithChapterNumbers(manga.id).groupBy { it.chapterNumber }
+        }
 
         val deletedChapterNumbers = TreeSet<Double>()
         val deletedReadChapterNumbers = TreeSet<Double>()
@@ -170,6 +181,9 @@ class SyncChaptersWithSource(
                 bookmark = chapter.chapterNumber in deletedBookmarkedChapterNumbers,
             )
 
+            // Existing bookmarks are saved to be moved to re-added chapters.
+            bookmarksByChapterNumber[chapter.chapterNumber]?.let { reAddedBookmarks.addAll(it) }
+
             // Try to to use the fetch date of the original entry to not pollute 'Updates' tab
             deletedChapterNumberDateFetchMap[chapter.chapterNumber]?.let {
                 chapter = chapter.copy(dateFetch = it)
@@ -193,6 +207,22 @@ class SyncChaptersWithSource(
             val chapterUpdates = updatedChapters.map { it.toChapterUpdate() }
             updateChapter.awaitAll(chapterUpdates)
         }
+
+        if (reAddedBookmarks.isNotEmpty()) {
+            val chapterIdByNumber = updatedToAdd.associate { it.chapterNumber to it.id }
+            val bookmarksToAdd = reAddedBookmarks.mapNotNull { bm ->
+                chapterIdByNumber[bm.chapterNumber]
+                    ?.let { chapterId ->
+                        bm.toBookmarkImpl().copy(
+                            mangaId = manga.id,
+                            chapterId = chapterId,
+                        )
+                    }
+            }
+
+            setBookmark.awaitAll(bookmarksToAdd, updateChapters = false)
+        }
+
         updateManga.awaitUpdateFetchInterval(manga, now, fetchWindow)
 
         // Set this manga as updated since chapters were changed

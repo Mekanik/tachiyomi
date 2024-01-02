@@ -60,6 +60,10 @@ import tachiyomi.core.util.lang.launchNonCancellable
 import tachiyomi.core.util.lang.withIOContext
 import tachiyomi.core.util.lang.withUIContext
 import tachiyomi.core.util.system.logcat
+import tachiyomi.domain.bookmark.interactor.DeleteBookmark
+import tachiyomi.domain.bookmark.interactor.GetBookmark
+import tachiyomi.domain.bookmark.interactor.SetBookmark
+import tachiyomi.domain.bookmark.model.Bookmark
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
@@ -97,6 +101,9 @@ class ReaderViewModel @JvmOverloads constructor(
     private val getNextChapters: GetNextChapters = Injekt.get(),
     private val upsertHistory: UpsertHistory = Injekt.get(),
     private val updateChapter: UpdateChapter = Injekt.get(),
+    private val setBookmark: SetBookmark = Injekt.get(),
+    private val deleteBookmark: DeleteBookmark = Injekt.get(),
+    private val getBookmark: GetBookmark = Injekt.get(),
     private val setMangaViewerFlags: SetMangaViewerFlags = Injekt.get(),
 ) : ViewModel() {
 
@@ -255,10 +262,15 @@ class ReaderViewModel @JvmOverloads constructor(
     }
 
     /**
-     * Initializes this presenter with the given [mangaId] and [initialChapterId]. This method will
-     * fetch the manga from the database and initialize the initial chapter.
+     * Initializes this presenter with the given [mangaId], [initialChapterId] and [pageIndex].
+     * [pageIndex] is optional, if provided, reader will open that page.
+     * This method will fetch the manga from the database and initialize the initial chapter.
      */
-    suspend fun init(mangaId: Long, initialChapterId: Long): Result<Boolean> {
+    suspend fun init(
+        mangaId: Long,
+        initialChapterId: Long,
+        pageIndex: Int? = null,
+    ): Result<Boolean> {
         if (!needsInit()) return Result.success(true)
         return withIOContext {
             try {
@@ -271,7 +283,15 @@ class ReaderViewModel @JvmOverloads constructor(
                     val source = sourceManager.getOrStub(manga.source)
                     loader = ChapterLoader(context, downloadManager, downloadProvider, manga, source)
 
-                    loadChapter(loader!!, chapterList.first { chapterId == it.chapter.id })
+                    val chapter = chapterList.first { chapterId == it.chapter.id }
+                    // TODO: this is hacky solution, what is proper?
+                    //   Don't update requestedPage if it's already >= 0, as initialized as -1.
+                    //   But maybe it's sometimes not -1 but expected to be updated?
+                    if (pageIndex != null && pageIndex >= 0) {
+                        chapter.requestedPage = pageIndex
+                        chapter.chapter.last_page_read = pageIndex
+                    }
+                    loadChapter(loader!!, chapter)
                     Result.success(true)
                 } else {
                     // Unlikely but okay
@@ -611,12 +631,11 @@ class ReaderViewModel @JvmOverloads constructor(
         chapter.bookmark = bookmarked
 
         viewModelScope.launchNonCancellable {
-            updateChapter.await(
-                ChapterUpdate(
-                    id = chapter.id!!.toLong(),
-                    bookmark = bookmarked,
-                ),
-            )
+            if (bookmarked) {
+                setBookmark.await(chapter.manga_id!!.toLong(), chapter.id!!.toLong(), null, null)
+            } else {
+                deleteBookmark.await(chapter.manga_id!!.toLong(), chapter.id!!.toLong(), null)
+            }
         }
 
         mutableState.update {
@@ -624,6 +643,40 @@ class ReaderViewModel @JvmOverloads constructor(
                 bookmarked = bookmarked,
             )
         }
+    }
+
+    /**
+     * Adds or updates a page bookmark for a page selected in page-actions dialog.
+     */
+    fun updateCurrentPageBookmark(bookmarkNote: String) {
+        val manga = manga ?: return
+        val page = (state.value.dialog as? Dialog.PageActions)?.page ?: return
+
+        viewModelScope.launchNonCancellable {
+            setBookmark.await(manga.id, chapterId, page.index, bookmarkNote)
+        }
+    }
+
+    /**
+     * Deletes the bookmark for the currently selected page.
+     */
+    fun deleteCurrentPageBookmark() {
+        val manga = manga ?: return
+        val page = (state.value.dialog as? Dialog.PageActions)?.page ?: return
+
+        viewModelScope.launchNonCancellable {
+            deleteBookmark.await(manga.id, chapterId, page.index)
+        }
+    }
+
+    /**
+     * Tries to retrieve the bookmark for the currently selected page.
+     * @return The bookmark for the current page, or null if it doesn't exist.
+     */
+    fun getPageBookmark(): Bookmark? {
+        val manga = manga ?: return null
+        val page = (state.value.dialog as? Dialog.PageActions)?.page ?: return null
+        return runBlocking { getBookmark.await(manga.id, chapterId, page.index) }
     }
 
     /**

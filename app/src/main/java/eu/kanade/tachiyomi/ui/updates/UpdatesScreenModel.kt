@@ -35,9 +35,11 @@ import logcat.LogPriority
 import tachiyomi.core.util.lang.launchIO
 import tachiyomi.core.util.lang.launchNonCancellable
 import tachiyomi.core.util.system.logcat
+import tachiyomi.domain.bookmark.interactor.DeleteBookmark
+import tachiyomi.domain.bookmark.interactor.SetBookmark
+import tachiyomi.domain.bookmark.model.Bookmark
+import tachiyomi.domain.bookmark.model.BookmarkDelete
 import tachiyomi.domain.chapter.interactor.GetChapter
-import tachiyomi.domain.chapter.interactor.UpdateChapter
-import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.source.service.SourceManager
@@ -52,12 +54,13 @@ class UpdatesScreenModel(
     private val sourceManager: SourceManager = Injekt.get(),
     private val downloadManager: DownloadManager = Injekt.get(),
     private val downloadCache: DownloadCache = Injekt.get(),
-    private val updateChapter: UpdateChapter = Injekt.get(),
     private val setReadStatus: SetReadStatus = Injekt.get(),
     private val getUpdates: GetUpdates = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
     private val getChapter: GetChapter = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
+    private val setBookmark: SetBookmark = Injekt.get(),
+    private val deleteBookmark: DeleteBookmark = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<UpdatesScreenModel.State>(State()) {
 
@@ -213,11 +216,21 @@ class UpdatesScreenModel(
      * @param updates the list of chapters to bookmark.
      */
     fun bookmarkUpdates(updates: List<UpdatesItem>, bookmark: Boolean) {
+        val toUpdate = updates.filterNot { it.update.bookmark == bookmark }
         screenModelScope.launchIO {
-            updates
-                .filterNot { it.update.bookmark == bookmark }
-                .map { ChapterUpdate(id = it.update.chapterId, bookmark = bookmark) }
-                .let { updateChapter.awaitAll(it) }
+            if (bookmark) {
+                toUpdate
+                    .map {
+                        Bookmark.create().copy(mangaId = it.update.mangaId, chapterId = it.update.chapterId)
+                    }
+                    .let { setBookmark.awaitAll(it) }
+            } else {
+                toUpdate
+                    .map {
+                        BookmarkDelete(mangaId = it.update.mangaId, chapterId = it.update.chapterId)
+                    }
+                    .let { deleteBookmark.awaitAll(it) }
+            }
         }
         toggleAllSelection(false)
     }

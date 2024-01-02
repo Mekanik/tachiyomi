@@ -36,10 +36,15 @@ import tachiyomi.core.preference.Preference
 import tachiyomi.core.preference.PreferenceStore
 import tachiyomi.core.util.lang.launchIO
 import tachiyomi.core.util.lang.withUIContext
+import tachiyomi.domain.bookmark.interactor.DeleteBookmark
+import tachiyomi.domain.bookmark.interactor.GetBookmarks
+import tachiyomi.domain.bookmark.interactor.SetBookmark
+import tachiyomi.domain.bookmark.model.Bookmark
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.UpdateChapter
+import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.toChapterUpdate
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
@@ -153,6 +158,9 @@ internal class MigrateDialogScreenModel(
     private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     private val syncChaptersWithSource: SyncChaptersWithSource = Injekt.get(),
     private val updateChapter: UpdateChapter = Injekt.get(),
+    private val getBookmarks: GetBookmarks = Injekt.get(),
+    private val setBookmark: SetBookmark = Injekt.get(),
+    private val deleteBookmark: DeleteBookmark = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
     private val setMangaCategories: SetMangaCategories = Injekt.get(),
     private val getTracks: GetTracks = Injekt.get(),
@@ -213,6 +221,7 @@ internal class MigrateDialogScreenModel(
         val migrateCategories = MigrationFlags.hasCategories(flags)
         val migrateCustomCover = MigrationFlags.hasCustomCover(flags)
         val deleteDownloaded = MigrationFlags.hasDeleteDownloaded(flags)
+        val migrateBookmarks = MigrationFlags.hasBookmarks(flags)
 
         try {
             syncChaptersWithSource.await(sourceChapters, newManga, newSource)
@@ -229,7 +238,17 @@ internal class MigrateDialogScreenModel(
                 .filter { it.read }
                 .maxOfOrNull { it.chapterNumber }
 
-            val updatedMangaChapters = mangaChapters.map { mangaChapter ->
+            val bookmarksByChapterId =
+                if (migrateBookmarks) {
+                    getBookmarks.await(oldManga.id).groupBy { it.chapterId }
+                } else {
+                    null
+                }
+
+            val updatedMangaChapters = mutableListOf<Chapter>()
+            val addedBookmarks = mutableListOf<Bookmark>()
+
+            mangaChapters.forEach { mangaChapter ->
                 var updatedChapter = mangaChapter
                 if (updatedChapter.isRecognizedNumber) {
                     val prevChapter = prevMangaChapters
@@ -238,8 +257,27 @@ internal class MigrateDialogScreenModel(
                     if (prevChapter != null) {
                         updatedChapter = updatedChapter.copy(
                             dateFetch = prevChapter.dateFetch,
-                            bookmark = prevChapter.bookmark,
                         )
+
+                        if (migrateBookmarks) {
+                            // Don't unbookmark anything, but copy existing bookmarks to updated.
+                            if (prevChapter.bookmark) {
+                                updatedChapter = updatedChapter.copy(bookmark = true)
+                            }
+
+                            bookmarksByChapterId
+                                ?.get(prevChapter.id)
+                                ?.let { bookmarks ->
+                                    addedBookmarks.addAll(
+                                        bookmarks.map { bookmark ->
+                                            bookmark.copy(
+                                                mangaId = newManga.id,
+                                                chapterId = updatedChapter.id,
+                                            )
+                                        },
+                                    )
+                                }
+                        }
                     }
 
                     if (maxChapterRead != null && updatedChapter.chapterNumber <= maxChapterRead) {
@@ -247,11 +285,23 @@ internal class MigrateDialogScreenModel(
                     }
                 }
 
-                updatedChapter
+                updatedMangaChapters.add(updatedChapter)
             }
 
             val chapterUpdates = updatedMangaChapters.map { it.toChapterUpdate() }
             updateChapter.awaitAll(chapterUpdates)
+
+            // Update bookmarks
+            if (migrateBookmarks) {
+                // Delete first, then insert/update in case manga is migrated into itself.
+                if (replace && bookmarksByChapterId?.isNotEmpty() == true) {
+                    deleteBookmark.awaitAllByMangaId(oldManga.id, updateChapters = false)
+                }
+
+                if (addedBookmarks.isNotEmpty()) {
+                    setBookmark.awaitAll(addedBookmarks, updateChapters = false)
+                }
+            }
         }
 
         // Update categories

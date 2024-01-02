@@ -4,6 +4,8 @@ import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
+import kotlinx.coroutines.runBlocking
+import tachiyomi.domain.bookmark.interactor.GetBookmarks
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.injectLazy
@@ -30,9 +32,11 @@ object MigrationFlags {
     private const val CATEGORIES = 0b00010
     private const val CUSTOM_COVER = 0b01000
     private const val DELETE_DOWNLOADED = 0b10000
+    private const val BOOKMARKS = 0b100000
 
     private val coverCache: CoverCache by injectLazy()
     private val downloadCache: DownloadCache by injectLazy()
+    private val getBookmarks: GetBookmarks by injectLazy()
 
     fun hasChapters(value: Int): Boolean {
         return value and CHAPTERS != 0
@@ -50,6 +54,10 @@ object MigrationFlags {
         return value and DELETE_DOWNLOADED != 0
     }
 
+    fun hasBookmarks(value: Int): Boolean {
+        return value and BOOKMARKS != 0
+    }
+
     /** Returns information about applicable flags with default selections. */
     fun getFlags(manga: Manga?, defaultSelectedBitMap: Int): List<MigrationFlag> {
         val flags = mutableListOf<MigrationFlag>()
@@ -62,6 +70,9 @@ object MigrationFlags {
             }
             if (downloadCache.getDownloadCount(manga) > 0) {
                 flags += MigrationFlag.create(DELETE_DOWNLOADED, defaultSelectedBitMap, MR.strings.delete_downloaded)
+            }
+            if (runBlocking { getBookmarks.await(manga.id) }.isNotEmpty()) {
+                flags += MigrationFlag.create(BOOKMARKS, defaultSelectedBitMap, MR.strings.label_bookmarks)
             }
         }
         return flags

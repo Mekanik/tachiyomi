@@ -1,0 +1,80 @@
+-- Tables and views for page bookmars with notes.
+
+CREATE TABLE IF NOT EXISTS bookmarks(
+    _id INTEGER NOT NULL PRIMARY KEY,
+    manga_id INTEGER NOT NULL,
+    chapter_id INTEGER NOT NULL,
+    page_index INTEGER,
+    note TEXT,
+    last_modified_at INTEGER NOT NULL DEFAULT 0,
+
+    FOREIGN KEY(manga_id) REFERENCES mangas (_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(chapter_id)  REFERENCES chapters (_id)
+    ON DELETE CASCADE
+);
+
+-- Only single bookmark per page is allowed.
+CREATE UNIQUE INDEX IF NOT EXISTS bookmark_manga_id_chapter_id_page_index
+ON bookmarks(manga_id, chapter_id, page_index);
+
+-- For chapters FK with DELETE CASCADE.
+CREATE INDEX IF NOT EXISTS bookmark_chapter_id ON bookmarks(chapter_id);
+
+CREATE TRIGGER IF NOT EXISTS update_last_modified_at_bookmarks
+AFTER UPDATE ON bookmarks
+FOR EACH ROW
+BEGIN
+  UPDATE bookmarks
+  SET last_modified_at = strftime('%s', 'now')
+  WHERE _id = new._id;
+END;
+
+
+DROP VIEW IF EXISTS bookmarksView;
+
+CREATE VIEW bookmarksView AS
+SELECT
+    bookmarks._id AS bookmarkId,
+    mangas._id AS mangaId,
+    chapters._id AS chapterId,
+    bookmarks.page_index AS pageIndex,
+    mangas.title AS mangaTitle,
+    mangas.thumbnail_url AS mangaThumbnailUrl,
+    mangas.source AS mangaSource,
+    mangas.favorite AS isMangaFavorite,
+    mangas.cover_last_modified AS mangaCoverLastModified,
+    chapters.chapter_number AS chapterNumber,
+    chapters.name AS chapterName,
+    bookmarks.note,
+    bookmarks.last_modified_at AS lastModifiedAt
+FROM bookmarks
+JOIN mangas ON mangas._id = bookmarks.manga_id
+JOIN chapters ON chapters._id = bookmarks.chapter_id
+ORDER BY mangaTitle, chapterNumber ASC, pageIndex ASC;
+
+
+DROP VIEW IF EXISTS mangaWithBookmarksView;
+
+CREATE VIEW mangaWithBookmarksView AS
+SELECT
+    mangas._id AS mangaId,
+    mangas.title AS mangaTitle,
+    mangas.thumbnail_url AS mangaThumbnailUrl,
+    mangas.source AS mangaSource,
+    mangas.favorite AS isMangaFavorite,
+    mangas.cover_last_modified AS mangaCoverLastModified,
+    COUNT(*) AS numberOfBookmarks,
+    MAX(bookmarks.last_modified_at) AS bookmarkLastModified
+FROM bookmarks
+JOIN mangas ON mangas._id = bookmarks.manga_id
+WHERE mangas.favorite = 1
+GROUP BY mangas._id
+ORDER BY numberOfBookmarks DESC;
+
+-- One-time insert new records for all bookmarked chapters.
+INSERT INTO bookmarks (manga_id, chapter_id, page_index, note, last_modified_at)
+SELECT manga_id, _id, NULL, NULL, last_modified_at
+FROM chapters
+WHERE bookmark = 1 AND NOT EXISTS (SELECT * FROM bookmarks WHERE bookmarks.page_index IS NULL);

@@ -4,7 +4,7 @@ data class ChapterUpdate(
     val id: Long,
     val mangaId: Long? = null,
     val read: Boolean? = null,
-    val bookmark: Boolean? = null,
+    private var _bookmark: Boolean? = null,
     val lastPageRead: Long? = null,
     val dateFetch: Long? = null,
     val sourceOrder: Long? = null,
@@ -13,7 +13,17 @@ data class ChapterUpdate(
     val dateUpload: Long? = null,
     val chapterNumber: Double? = null,
     val scanlator: String? = null,
-)
+) {
+    val bookmark: Boolean?
+        get() = _bookmark
+
+    companion object {
+        // Only to be used from set/delete bookmarks components to keep bookmarks record consistent.
+        fun bookmarkUpdate(id: Long, bookmark: Boolean): ChapterUpdate {
+            return ChapterUpdate(id, _bookmark = bookmark)
+        }
+    }
+}
 
 fun Chapter.toChapterUpdate(): ChapterUpdate {
     return ChapterUpdate(
